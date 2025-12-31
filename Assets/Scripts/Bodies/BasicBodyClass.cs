@@ -1,14 +1,11 @@
-using NUnit.Framework;
 using PerspectiveRenderer.Body.Types;
 using PerspectiveRenderer.Config;
-using System;
 using System.Collections.Generic;
 using UnityEngine;
-using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
 namespace PerspectiveRenderer.Body.BasicBody
 {
-    [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
+    [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(PolygonCollider2D))]
     [System.Serializable]
     public class BasicBodyClass : MonoBehaviour
     {
@@ -26,6 +23,7 @@ namespace PerspectiveRenderer.Body.BasicBody
 
         private Mesh bodyMesh;
         private MeshFilter meshFilter;
+        private PolygonCollider2D polygonCollider2D;
 
         public ref readonly SerializedInfo BodyInfo => ref bodyInfo;
 
@@ -33,12 +31,14 @@ namespace PerspectiveRenderer.Body.BasicBody
         private void Awake()
         {
             meshFilter = GetComponent<MeshFilter>();
+            polygonCollider2D = GetComponent<PolygonCollider2D>();
             bodyMesh = new Mesh();
         }
 
         // Start is called once before the first execution of Update after the MonoBehaviour is created
         void Start()
         {
+            polygonCollider2D.enabled = false;
             ReBuild();
         }
 
@@ -51,6 +51,14 @@ namespace PerspectiveRenderer.Body.BasicBody
         private void ReBuild()
         {
             bodyMesh.Clear();
+
+            bodyInfo.points.Clear();
+            Vector2[] polypoints = polygonCollider2D.GetPath(0);
+
+            for (int i = 0; i < polypoints.Length; i++)
+            {
+                bodyInfo.points.Add(new Vector3(polypoints[i].x, polypoints[i].y, 0f));
+            }
 
             if (bodyInfo.points.Count < 3)
             {
@@ -67,7 +75,7 @@ namespace PerspectiveRenderer.Body.BasicBody
                     BuildExtrusion(out vertices, out triangles);
                     break;
                 case BodyType.REVOLUTION:
-                    BuildRevolution(Vector3.zero, bodyInfo.revolutionRadianLength, out vertices, out triangles);
+                    BuildRevolution(out vertices, out triangles);
                     break;
                 default:
                     Debug.LogError("Unknown body type");
@@ -86,8 +94,8 @@ namespace PerspectiveRenderer.Body.BasicBody
 
         private void BuildExtrusion(out Vector3[] vertices, out int[] triangles)
         {
-            List<Vector3> verts = new List<Vector3>();
-            List<int> tris = new List<int>();
+            List<Vector3> verts = new();
+            List<int> tris = new();
             Vector3[] temp_vertices;
             int[] temp_triangles;
 
@@ -95,21 +103,21 @@ namespace PerspectiveRenderer.Body.BasicBody
 
             /* Upper face */
             temp_vertices = bodyInfo.points.ToArray();
-            temp_triangles = FanTriangulation(temp_vertices.Length, 0);
+            temp_triangles = FanTriangulation(temp_vertices.Length, 0, false);
             verts.AddRange(temp_vertices);
             tris.AddRange(temp_triangles);
 
             accumOffset += temp_vertices.Length;
 
             /* Lower face */
-            List<Vector3> lowerFace = new List<Vector3>(bodyInfo.points);
+            List<Vector3> lowerFace = new(bodyInfo.points);
             lowerFace.Reverse();
             for (int i = 0; i < lowerFace.Count; i++)
             {
                 lowerFace[i] += bodyInfo.extrusionVector;
             }
             temp_vertices = lowerFace.ToArray();
-            temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset);
+            temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset, false);
             verts.AddRange(temp_vertices);
             tris.AddRange(temp_triangles);
 
@@ -120,12 +128,12 @@ namespace PerspectiveRenderer.Body.BasicBody
             for (int i = 0; i < pointCount; i++)
             {
                 int nextIndex = (i + 1) % pointCount;
-                Vector3 v1 = bodyInfo.points[i];
-                Vector3 v0 = bodyInfo.points[nextIndex];
-                Vector3 v3 = bodyInfo.points[nextIndex] + bodyInfo.extrusionVector;
-                Vector3 v2 = bodyInfo.points[i] + bodyInfo.extrusionVector;
+                Vector3 v0 = bodyInfo.points[i];
+                Vector3 v1 = bodyInfo.points[nextIndex];
+                Vector3 v2 = bodyInfo.points[nextIndex] + bodyInfo.extrusionVector;
+                Vector3 v3 = bodyInfo.points[i] + bodyInfo.extrusionVector;
                 temp_vertices = new Vector3[] { v0, v1, v2, v3 };
-                temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset);
+                temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset, true);
                 verts.AddRange(temp_vertices);
                 tris.AddRange(temp_triangles);
                 accumOffset += temp_vertices.Length;
@@ -136,20 +144,21 @@ namespace PerspectiveRenderer.Body.BasicBody
             triangles = tris.ToArray();
         }
 
-        private void BuildRevolution(Vector3 center, float arcRadians, out Vector3[] vertices, out int[] triangles)
+        private void BuildRevolution(out Vector3[] vertices, out int[] triangles)
         {
-            List<Vector3> verts = new List<Vector3>();
-            List<int> tris = new List<int>();
+            List<Vector3> verts = new();
+            List<int> tris = new();
             Vector3[] temp_vertices;
             int[] temp_triangles;
 
             int accumOffset = 0;
+            bool reverse = bodyInfo.revolutionAxis == RevolutionAxis.Y_AXIS;
 
-            if ((arcRadians > -FixedConfig.TWO_PI) && (arcRadians < FixedConfig.TWO_PI))
+            if ((bodyInfo.revolutionRadianLength > -FixedConfig.TWO_PI) && (bodyInfo.revolutionRadianLength < FixedConfig.TWO_PI))
             {
                 /* Arc start face */
                 temp_vertices = bodyInfo.points.ToArray();
-                temp_triangles = FanTriangulation(temp_vertices.Length, 0);
+                temp_triangles = FanTriangulation(temp_vertices.Length, 0, reverse);
                 verts.AddRange(temp_vertices);
                 tris.AddRange(temp_triangles);
 
@@ -166,12 +175,14 @@ namespace PerspectiveRenderer.Body.BasicBody
                     lowerFace[i] = bodyInfo.revolutionCenter + (rot_end * (lowerFace[i]-bodyInfo.revolutionCenter));
                 }
                 temp_vertices = lowerFace.ToArray();
-                temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset);
+                temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset, reverse);
                 verts.AddRange(temp_vertices);
                 tris.AddRange(temp_triangles);
 
                 accumOffset += temp_vertices.Length;
             }
+
+            
 
             /* Side faces */
             float rot_total = Mathf.Clamp(bodyInfo.revolutionRadianLength, -FixedConfig.TWO_PI, FixedConfig.TWO_PI);
@@ -195,7 +206,7 @@ namespace PerspectiveRenderer.Body.BasicBody
                     Vector3 v2 = bodyInfo.revolutionCenter + (rot_end * (bodyInfo.points[i] - bodyInfo.revolutionCenter));
 
                     temp_vertices = new Vector3[] { v0, v1, v2, v3 };
-                    temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset);
+                    temp_triangles = FanTriangulation(temp_vertices.Length, accumOffset, reverse);
 
                     verts.AddRange(temp_vertices);
                     tris.AddRange(temp_triangles);
@@ -203,24 +214,31 @@ namespace PerspectiveRenderer.Body.BasicBody
                 }
             }
 
-            if(bodyInfo.revolutionAxis == RevolutionAxis.Y_AXIS)
-            {
-                tris.Reverse();
-            }
-
             vertices = verts.ToArray();
             triangles = tris.ToArray();
         }
 
-        private int[] FanTriangulation(int verticesCount, int offset)
+        private int[] FanTriangulation(int verticesCount, int offset, bool reverse)
         {
             int[] triangles = new int[(verticesCount - 2) * 3];
 
-            for (int i = 0; i < verticesCount - 2; i++)
+            if (reverse)
             {
-                triangles[i * 3] = offset;
-                triangles[i * 3 + 1] = offset + i + 1;
-                triangles[i * 3 + 2] = offset + i + 2;
+                for (int i = 0; i < verticesCount - 2; i++)
+                {
+                    triangles[i * 3 + 2] = offset;
+                    triangles[i * 3 + 1] = offset + i + 1;
+                    triangles[i * 3] = offset + i + 2;
+                }
+            }
+            else
+            {
+                for (int i = 0; i < verticesCount - 2; i++)
+                {
+                    triangles[i * 3] = offset;
+                    triangles[i * 3 + 1] = offset + i + 1;
+                    triangles[i * 3 + 2] = offset + i + 2;
+                }
             }
 
             return triangles;
