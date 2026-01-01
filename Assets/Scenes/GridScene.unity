@@ -168,14 +168,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MasterRenderer
   colorFondo: {r: 1, g: 1, b: 1, a: 1}
   colorLineas: {r: 0, g: 0, b: 0, a: 1}
-  horizontAltitude: 0.6
+  horizontAltitude: 0.5
   vanishing_points: 0
   vanish_x: 0.5
   vanish_y: 0.5
   vanish_z: 0.5
   gridStartX: -1
   gridEndX: 2
-  gridNumberX: 31
+  gridNumberX: 21
   gridNumberY: 516
   gridAngle: 0
   materialDibujo: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}

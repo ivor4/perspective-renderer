@@ -92,31 +92,46 @@ namespace PerspectiveRenderer.Grid
 
         void DrawOneVanishingPoint()
         {
-            double factor = 1f / (gridNumberX-1);
+            double factor = 1f / (gridNumberX - 1);
             double width = gridEndX - gridStartX;
             double sideSize = factor * width;
+            double screenRatio = (double)Screen.width / (double)Screen.height;
 
             for (int i=0; i < gridNumberX; i++)
             {
-                GL.Vertex3(vanish_x, horizontAltitude, 0);
-                GL.Vertex3((float)(gridStartX + (i * sideSize)), 0f, 0);
+                DrawLineCorrectingFactor(vanish_x, horizontAltitude, (float)(gridStartX + (i * sideSize)), 0f, (float)screenRatio);
             }
 
-            double screenRatio = (double)Screen.width / (double)Screen.height;
-            double prev_width = sideSize;
+            
             double prev_y = 0d;
 
             for (int i=0; i < gridNumberY; i++)
             {
-                double height = (prev_width * horizontAltitude) / (horizontAltitude + sideSize);
-                
-                //Debug.Log(i + " : height=" + height + ", prev_y=" + prev_y + ", prev_width=" + prev_width);
-                GL.Vertex3(0, (float)(prev_y * screenRatio), 0);
-                GL.Vertex3(1f, (float)(prev_y * screenRatio), 0);
+                double new_y = horizontAltitude * ((sideSize * (horizontAltitude - prev_y)) + (prev_y * horizontAltitude));
+                new_y /= (sideSize * (horizontAltitude - prev_y)) + (horizontAltitude * horizontAltitude);
 
-                prev_y += height;
-                prev_width = sideSize * (horizontAltitude - prev_y) / horizontAltitude;
+                double delta_y = new_y - prev_y;
+
+                if(delta_y < 0.001d)
+                {
+                    break;
+                }
+
+                DrawLineCorrectingFactor(0f, (float)prev_y, 1f, (float)prev_y, (float)screenRatio);
+
+                prev_y = new_y;
             }
+        }
+
+        static void DrawLineCorrectingFactor(float x1, float y1, float x2, float y2, float factor)
+        {
+            float correctedX1 = x1;
+            float correctedY1 = y1 * factor;
+            float correctedX2 = x2;
+            float correctedY2 = y2 * factor;
+
+            GL.Vertex3(correctedX1, correctedY1, 0);
+            GL.Vertex3(correctedX2, correctedY2, 0);
         }
     }
 }
