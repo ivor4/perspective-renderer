@@ -78,7 +78,7 @@ namespace PerspectiveRenderer.Grid
                     DrawOneVanishingPoint();
                     break;
                 case VanishingPoints.TWO_POINT:
-                    //DrawTwoVanishingPoints();
+                    DrawTwoVanishingPoint();
                     break;
                 case VanishingPoints.THREE_POINT:
                     //DrawThreeVanishingPoints();
@@ -97,13 +97,11 @@ namespace PerspectiveRenderer.Grid
             double sideSize = factor * width;
             double screenRatio = (double)Screen.width / (double)Screen.height;
 
-            for (int i=0; i < gridNumberX; i++)
-            {
-                DrawLineCorrectingFactor(vanish_x, horizontAltitude, (float)(gridStartX + (i * sideSize)), 0f, (float)screenRatio);
-            }
+            
 
             
             double prev_y = 0d;
+            double highest_y = 0d;
 
             for (int i=0; i < gridNumberY; i++)
             {
@@ -112,14 +110,44 @@ namespace PerspectiveRenderer.Grid
 
                 double delta_y = new_y - prev_y;
 
-                if(delta_y < 0.001d)
+                if (delta_y < 0.001d)
                 {
                     break;
                 }
 
+                highest_y = new_y;
+
                 DrawLineCorrectingFactor(0f, (float)prev_y, 1f, (float)prev_y, (float)screenRatio);
 
                 prev_y = new_y;
+            }
+
+            for (int i = 0; i < gridNumberX; i++)
+            {
+                double finalX = gridStartX + (i * sideSize);
+                double growXFactor = finalX - vanish_x;
+                growXFactor /= horizontAltitude;
+                double initialX = (horizontAltitude - highest_y) * growXFactor + vanish_x;
+                DrawLineCorrectingFactor((float)initialX, (float)highest_y, (float)(gridStartX + (i * sideSize)), 0f, (float)screenRatio);
+            }
+        }
+
+        void DrawTwoVanishingPoint()
+        {
+            double factor = 1f / (gridNumberX - 1);
+            double width = gridEndX - gridStartX;
+            double sideSize = factor * width;
+            double screenRatio = (double)Screen.width / (double)Screen.height;
+
+
+            for (int i = 0; i < gridNumberX; i++)
+            {
+                DrawLineCorrectingFactor(vanish_x, horizontAltitude, (float)(gridStartX + (i * sideSize)), 0f, (float)screenRatio);
+            }
+
+            for (int i = 0; i < gridNumberY; i++)
+            {
+                DrawLineCorrectingFactor(vanish_y, horizontAltitude, (float)(gridStartX + (i * sideSize)), 0f, (float)screenRatio);
             }
         }
 
